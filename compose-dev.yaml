@@ -1,8 +1,9 @@
 services:
   cool-compiler:
-    build:
-      context: .
-      target: dev-envs
+    # build:
+    #   context: .
+    #   target: dev-envs
+    image: i386/gcc
     tty: true
     container_name: cs143-compiler
     volumes:
