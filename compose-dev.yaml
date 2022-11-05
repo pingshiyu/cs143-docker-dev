@@ -3,13 +3,9 @@ services:
     # build:
     #   context: .
     #   target: dev-envs
-
-    build:
-      context: .
-      target: dev-envs
-    # tty: true
+    image: i386/ubuntu
+    tty: true
     container_name: cs143-compiler
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
       - "./class:/usr/class"
-    stop_signal: SIGINT
