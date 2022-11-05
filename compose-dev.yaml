@@ -3,7 +3,7 @@ services:
     # build:
     #   context: .
     #   target: dev-envs
-    image: i386/ubuntu
+    image: python:3.10-alpine
     tty: true
     container_name: cs143-compiler
     volumes:
