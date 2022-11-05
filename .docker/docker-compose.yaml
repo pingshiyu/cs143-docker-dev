@@ -5,3 +5,4 @@ services:
    container_name: cs143-compiler
    volumes:
      - "./class:/usr/class"
+     - /var/run/docker.sock:/var/run/docker.sock
