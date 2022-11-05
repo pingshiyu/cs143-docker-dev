@@ -1,7 +1,0 @@
-services:
- cool-compiler:
-   build:
-      context: .
-   container_name: cs143-compiler
-   volumes:
-     - "./class:/usr/class"
