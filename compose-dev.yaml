@@ -3,7 +3,7 @@ services:
     # build:
     #   context: .
     #   target: dev-envs
-    image: i386/gcc
+    image: amd64/ubuntu
     tty: true
     container_name: cs143-compiler
     volumes:
