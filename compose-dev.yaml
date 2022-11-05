@@ -1,10 +1,15 @@
 services:
-  web: 
+  cool-compiler:
+    # build:
+    #   context: .
+    #   target: dev-envs
+
     build:
-      context: python-persist
+      context: .
       target: dev-envs
-    stop_signal: SIGINT
-    ports: 
-      - '8000:8000'
+    # tty: true
+    container_name: cs143-compiler
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "./class:/usr/class"
+    stop_signal: SIGINT
