@@ -13,8 +13,10 @@ class Evaluate inherits IO {
       (let i_type : String <- item.getType() in 
          if i_type = "x" then
             false
-         else if i_type = "e" then 
-            self.evaluate_top(stack)
+         else if i_type = "e" then {
+            self.evaluate_top(stack);
+            true; -- continue anyways even if evaluation doesnt change stack
+         }
          else if i_type = "d" then {
             stack.print(self);
             true;
@@ -34,8 +36,11 @@ class Evaluate inherits IO {
                (new AddStackCommand).evaluate_top(stack)
             else if s_type = "s" then
                (new SwapStackCommand).evaluate_top(stack)
-            else 
-               false
+            else {
+               -- cannot evaluate, return stack to original state
+               if not s.getType() = "empty" then stack.push(s) else 0 fi;
+               false;
+            }
             fi fi
          )
       )
@@ -50,11 +55,23 @@ class StackCommand {
 
 class SwapStackCommand inherits StackCommand {
    evaluate_top(stack: Stack) : Bool {
-      (let swapItem : StackItem <- stack.pop() in 
-         (let s1 : StackItem <- stack.pop() in 
-            (let s2 : StackItem <- stack.pop() in {
-               stack.push(s1);
-               stack.push(s2);
+      (let s1 : StackItem <- stack.pop() in 
+         (let s2 : StackItem <- stack.pop() in {
+            stack.push(s1);
+            stack.push(s2);
+            true;
+         })
+      )
+   };
+};
+
+class AddStackCommand inherits StackCommand { 
+   evaluate_top(stack: Stack) : Bool {
+      (let i1 : StackItem <- stack.pop() in 
+         (let i2 : StackItem <- stack.pop() in 
+            (let newItem : StackItem in {
+               newItem <- (new StackItem).init_int((new A2I).i2a(i1.getValue() + i2.getValue()));
+               stack.push(newItem);
                true;
             })
          )
@@ -62,60 +79,58 @@ class SwapStackCommand inherits StackCommand {
    };
 };
 
-class AddStackCommand inherits StackCommand { 
-   evaluate_top(stack: Stack) : Bool {
-      (let add: StackItem <- stack.pop() in 
-         (let i1 : StackItem <- stack.pop() in 
-            (let i2 : StackItem <- stack.pop() in 
-               (let newItem : StackItem in {
-                  newItem <- (new StackItem).init_int(i1.getValue() + i2.getValue());
-                  stack.push(newItem);
-                  true;
-               })
-            )
-         )
-      )
-   };
-};
-
 class Stack {
-   items_ : StackItemsList; 
+   items_ : StackItemsList <- (new StackItemsList); 
 
    push(item : StackItem) : Object {
-      items_ <- (new Cons).init(item, items_)
+      items_ <- items_.cons(item)
    };
 
    pop() : StackItem {
-      (let popped: StackItem <- items_.head() in {
-         items_ <- items_.tail();
-         popped;
-      })
+      if not items_.isNil() then
+         (let popped: StackItem <- items_.head() in {
+            items_ <- items_.tail();
+            popped;
+         })
+      else 
+         (new StackItem).init("empty")
+      fi
    };
 
    print(io : IO) : Object {
-      case items_ of 
-         xxs : Cons => xxs.print(io);
-         nil : StackItemsList => 0;
-      esac
+      if items_.isNil() then 
+         io.out_string("Stack is empty!")
+      else 
+         case items_ of 
+            xxs : Cons => xxs.print(io);
+            nil : StackItemsList => 0;
+         esac
+      fi
    };
 };
 
 (* interface *)
-class StackItem {
+class StackItem inherits BoolOp {
    type : String; (* better to use an enum *)
    (* "+", "s" or "i" (for integer) *)
    value_ : Int <- ~1; (* hidden variable for value integer *)
 
-   init() : StackItem {{
-      type <- "undefined";
+   init(t: String) : StackItem {{
+      type <- t;
       self;
    }};
 
-   init_int(i : Int) : StackItem {{
-      self.init();
-      value_ <- i;
+   init_int(i_as_str : String) : StackItem {{
+      self.init("i");
+      value_ <- (new A2I).a2i(i_as_str);
       self;
-   }}; 
+   }};
+
+   init_from_string(v : String) : StackItem {
+      if or_5(v="e", v="x", v="+", v="s", v="d") then (new StackItem).init(v)
+      else (new StackItem).init_int(v) 
+      fi
+   };
 
    getValue() : Int { value_ };
    getType() : String { type };
@@ -164,6 +179,7 @@ class Cons inherits StackItemsList {
 
    print(io : IO) : Object {{
       io.out_string(car.getString());
+      io.out_string("\n");
       case cdr of 
          xs : Cons => xs.print(io);
          o : StackItemsList => 0; -- empty list, nothing to print
@@ -172,29 +188,50 @@ class Cons inherits StackItemsList {
 
 };
 
+class BoolOp {
+
+  and(b1 : Bool, b2 : Bool) : Bool {
+     if b1 then b2 else false fi
+  };
+
+
+  or(b1 : Bool, b2 : Bool) : Bool {
+     if b1 then true else b2 fi
+  };
+
+  or_5(b1: Bool, b2: Bool, b3: Bool, b4: Bool, b5: Bool) : Bool {
+      or(or(or(or(b1, b2), b3), b4), b5)
+  };
+
+};
+
 class Main inherits IO {
 
    prompt() : String {
       {
-         out_string("\n");
          out_string("> ");
-         (let x : String <- in_string() in
-            if x = "e"
-         );
+         in_string();
       }
    };
 
    main() : Object {
+      -- init our stack
+      (let stack : Stack <- (new Stack) in
+         (let evaluator : Evaluate <- (new Evaluate) in 
+            while evaluator.process_input(
+               (new StackItem).init_from_string(prompt()), stack) loop {
+               0;
+            } pool
+            -- loop and load in values (while s != 'x') loop:
+            --    is value to print or evaluate?
+            --       yes: print/evaluate
+            --    no:
+            --       create stack item;
+            --       push to stack
 
-
-      -- loop and load in values (while s != 'x') loop:
-      --    is value to print or evaluate?
-      --       yes: print/evaluate
-      --    no:
-      --       create stack item;
-      --       push to stack
-
-      out_string("Nothing implemented\n")
+            -- out_string("Nothing implemented\n")
+         )
+      )
    };
 
 };

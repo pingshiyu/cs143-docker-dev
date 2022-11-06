@@ -58,14 +58,19 @@ Questions on PA1
 
 1. Describe your implementation of the stack machine in a single short
    paragraph.
-	- Reader class: keeps prompting the user to enter symbols and saves it in a list (Stack)
-		- The Stack offers some method to manipulate it so that users don't have to modify the underlying data structure.
-	- The list is a list of StackItems, which are created during data entry.
-		- Each StackItem contains a method to manipulate the Stack
-	- The process stops until we reach an int or stop
+	- The implementation is very messy and does not make proper use of classes. Do not copy!!
+		- Mostly just trying to work around the (perceived) limitations of Cool, e.g. in the beginning I though `case` statements did not exist, and so it was not possibile to infer subclass types at runtime.
+	- The inputs are saved in these `StackItem` objects, which will convert integer strings into `Int` types, and keep the other commands as is. 
+		- These `StackItem` objects should really be split into two classes to make their purposes clearer: `StackItem` and `InputCommand`. `StackItem` for the objects that actually go on the stack (`s`, `+` and `Int`s), `InputCommand` for the commands (`x`, `d`, and `e`).
+	- The stack is implemented as a `List`
+	- We consume the inputs when we get a command, (`e`, `d`, `x`), and we call their respective functions when we receive them.
 
 2. List 3 things that you like about the Cool programming language.
-
+	- It has classes & inheritance structure
+	- It has a `case` construct which makes it possible to determine types of subclasses at runtime
+	- It implements sequencing in an functional way
 
 3. List 3 things you DON'T like about Cool.
-
+	- If and loop statements requires closing `fi` and `pool`s which are easy to forget. `if` statements forces the `else` branch to be written as well.
+	- Sequencing constructs are difficult to get right, particularly with brackets and semicolons.
+	- Lack of detailed syntax and static analysis error messages 
