@@ -1,11 +1,14 @@
 services:
   cool-compiler:
-    # build:
-    #   context: .
-    #   target: dev-envs
-    image: amd64/ubuntu
+    build:
+      context: .
+      target: dev-envs
     tty: true
     container_name: cs143-compiler
     volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock"
-      - "./class:/usr/class"
+      - type: bind
+        source: "/var/run/docker.sock"
+        target: "/var/run/docker.sock"
+      - type: bind
+        source: "./class"
+        target: "/usr/class"
