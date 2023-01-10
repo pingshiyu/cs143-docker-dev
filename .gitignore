@@ -1,2 +1,13 @@
 class/*
 !class/.gitkeep
+
+# assignments (files which are modified)
+!class/assignments/**/*.flex
+!class/assignments/**/README
+
+# assignment 1
+!class/assignments/PA1/stack.cl
+
+# assignment 2
+!class/assignments/PA2/README
+!class/assignments/PA2/test1.cl
