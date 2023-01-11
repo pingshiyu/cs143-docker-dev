@@ -1,13 +1,23 @@
-class/*
-!class/.gitkeep
+# vscode stuff
+.vscode
 
 # assignments (files which are modified)
-!class/assignments/**/*.flex
-!class/assignments/**/README
+class/*
+class/.gitkeep
+
+!class/assignments
+class/assignments/*
 
 # assignment 1
+!class/assignments/PA1
+class/assignments/PA1/*
 !class/assignments/PA1/stack.cl
+!class/assignments/PA1/README
+!class/assignments/PA1/*.test
 
 # assignment 2
+!class/assignments/PA2
+class/assignments/PA2/*
+!class/assignments/PA2/*.flex
 !class/assignments/PA2/README
-!class/assignments/PA2/test1.cl
+!class/assignments/PA2/test*.cl
