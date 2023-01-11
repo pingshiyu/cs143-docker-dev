@@ -102,7 +102,7 @@ LE              <=
 <COMMENT><<EOF>>    { cool_yylval.error_msg = "EOF in comment";
                       END_CONTEXT_WITH_ERR;
                     }
-<COMMENT>.|\n       ;                   /* munch all single chars */
+<COMMENT>.          ;                   /* munch all single chars */
 <COMMENT>\*\)       { BEGIN(INITIAL); } /* end comment normally */
 
  /*
@@ -121,6 +121,8 @@ LE              <=
 <INITIAL>\)         { return ')'; }
 <INITIAL>\{         { return '{'; }
 <INITIAL>\}         { return '}'; }
+<INITIAL>\[         { return '['; }
+<INITIAL>\]         { return ']'; }
 <INITIAL>=          { return '='; }
 <INITIAL>\+         { return '+'; }
 <INITIAL>-          { return '-'; }
@@ -128,6 +130,7 @@ LE              <=
 <INITIAL>\/         { return '/'; }
 <INITIAL><          { return '<'; }
 <INITIAL>@          { return '@'; }
+<INITIAL>'          { return '\''; }
 
  /*
   *  The multiple-character operators.
@@ -216,7 +219,7 @@ LE              <=
   * Nothing else matches
   */
 <INITIAL>{WHITESPACE} ;
-<INITIAL>\n           { curr_lineno++; }
+\n                    { curr_lineno++; } /* this is always active */
 <INITIAL>.            { cool_yylval.error_msg = yytext; return ERROR; }
 
 %%
