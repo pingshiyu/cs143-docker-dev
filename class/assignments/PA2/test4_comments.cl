@@ -12,7 +12,8 @@ class Main inherits IO {
                     
                 pool
             );  (* normal comment *)
-            self; 
+            self; (* nested comment level 1
+            (*level 2 nested comment*) *)
         } (* unclosed comment ***
     }
 } 

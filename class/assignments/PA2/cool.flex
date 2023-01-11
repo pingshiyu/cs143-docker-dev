@@ -42,7 +42,7 @@ extern YYSTYPE cool_yylval;
 /*
  *  Add Your own definitions here
  */
-int token_index = 0, strleng = 0;
+int token_index = 0, strleng = 0, comment_level = 0;
 #define END_CONTEXT_WITH_ERR BEGIN(INITIAL); return ERROR;
 
 %}
@@ -98,12 +98,13 @@ LE              <=
   */
 <INITIAL>\*\)       { cool_yylval.error_msg = "Unmatched *)"; 
                       END_CONTEXT_WITH_ERR; }
-<INITIAL>\(\*       { BEGIN(COMMENT); }
+<INITIAL>\(\*       { BEGIN(COMMENT); comment_level++; }
+<COMMENT>\(\*       { comment_level++; }
 <COMMENT><<EOF>>    { cool_yylval.error_msg = "EOF in comment";
                       END_CONTEXT_WITH_ERR;
                     }
 <COMMENT>.          ;                   /* munch all single chars */
-<COMMENT>\*\)       { BEGIN(INITIAL); } /* end comment normally */
+<COMMENT>\*\)       { if (--comment_level == 0) { BEGIN(INITIAL); } } /* end comment normally */
 
  /*
   * Single-line comments
@@ -121,8 +122,6 @@ LE              <=
 <INITIAL>\)         { return ')'; }
 <INITIAL>\{         { return '{'; }
 <INITIAL>\}         { return '}'; }
-<INITIAL>\[         { return '['; }
-<INITIAL>\]         { return ']'; }
 <INITIAL>=          { return '='; }
 <INITIAL>\+         { return '+'; }
 <INITIAL>-          { return '-'; }
@@ -130,7 +129,6 @@ LE              <=
 <INITIAL>\/         { return '/'; }
 <INITIAL><          { return '<'; }
 <INITIAL>@          { return '@'; }
-<INITIAL>'          { return '\''; }
 
  /*
   *  The multiple-character operators.
