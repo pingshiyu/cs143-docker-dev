@@ -23,15 +23,16 @@ module COOL[] begin
 
   constructor program(classes : Classes) : Program;
   constructor class_(name : Symbol; parent: Symbol; 
-	             features : Features; filename : Symbol): Class_;
+	                   features : Features; 
+                     filename : Symbol): Class_;
 
   -- Features:
   constructor method(name : Symbol;
-		     formals : Formals;
-		     return_type : Symbol;
-		     expr: Expression) : Feature;
+		                 formals : Formals;
+		                 return_type : Symbol;
+		                 expr: Expression) : Feature;
   constructor attr(name, type_decl : Symbol;
-		   init : Expression) : Feature;
+		               init : Expression) : Feature;
 
   -- Formals
   constructor formal(name, type_decl: Symbol) : Formal;
@@ -46,14 +47,14 @@ module COOL[] begin
                               name : Symbol; 
                               actual : Expressions) : Expression;
   constructor dispatch(expr : Expression; 
-		       name : Symbol;
-		       actual : Expressions) : Expression;
+		                   name : Symbol;
+		                   actual : Expressions) : Expression;
   constructor cond(pred, then_exp, else_exp : Expression): Expression;
   constructor loop(pred, body: Expression) : Expression;
   constructor typcase(expr: Expression; cases: Cases): Expression;
   constructor block(body: Expressions) : Expression;
   constructor let(identifier, type_decl: Symbol; 
-		  init, body: Expression): Expression;
+		              init, body: Expression): Expression;
   constructor plus(e1, e2: Expression) : Expression;
   constructor  sub(e1, e2: Expression) : Expression;
   constructor  mul(e1, e2: Expression) : Expression;
