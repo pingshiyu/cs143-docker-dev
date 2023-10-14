@@ -140,75 +140,104 @@
     %type <formals>     formal_list
     
     /* features */
-    %type <feature>     method
-    %type <feature>     attr
+    %type <feature>     feature
     %type <features>    feature_list
     
     /* expressions */
-    %type <expression>  assign
-    %type <expression>  static_dispatch
-    %type <expression>  dispatch
-    /* ... etc ... */
-    %type <expressions> expression_list
+    %type <expression>  expr
+    %type <expressions> expr_list
 
     /* Precedence declarations go here. */
-    
+    %right '-' '@' '.'
     
     %%
     /* 
     Save the root of the abstract syntax tree in a global variable.
     */
-    program	: class_list	{ @$ = @1; ast_root = program($1); }
+    program	: 
+      class_list	
+      { @$ = @1; ast_root = program($1); }
     ;
     
-    class_list
-    : class	{ $$ = single_Classes($1); /* single class */
-              parse_results = $$; }
-    | class_list class { $$ = append_Classes($1, single_Classes($2)); /* several classes */
-                         parse_results = $$; }
+    class_list : 
+      class	';'
+      { $$ = single_Classes($1); /* single class */
+        parse_results = $$; }
+    | class_list ';' class ';' 
+      { $$ = append_Classes($1, single_Classes($3)); /* several classes */
+        parse_results = $$; }
     ;
     
     /* If no parent is specified, the class inherits from the Object class. */
-    class	: CLASS TYPEID '{' feature_list '}' ';' 
-    { $$ = class_($2, idtable.add_string("Object"), $4, stringtable.add_string(curr_filename)); }
-    | CLASS TYPEID INHERITS TYPEID '{' feature_list '}' ';'
-    { $$ = class_($2, $4, $6, stringtable.add_string(curr_filename)); }
+    class	: 
+      CLASS TYPEID '{' feature_list '}' 
+      { $$ = class_($2, idtable.add_string("Object"), $4, stringtable.add_string(curr_filename)); }
+    | CLASS TYPEID '{' '}'
+      { $$ = class_($2, idtable.add_string("Object"), nil_Features(), stringtable.add_string(curr_filename)); }
+    | CLASS TYPEID INHERITS TYPEID '{' feature_list '}'
+      { $$ = class_($2, $4, $6, stringtable.add_string(curr_filename)); }
+    | CLASS TYPEID INHERITS TYPEID '{' '}'
+      { $$ = class_($2, $4, nil_Features(), stringtable.add_string(curr_filename)); }
     ;
-    
+
+    /* features */
     /* Feature list may be empty, but no empty features in list. */
     feature : 
-    OBJECTID '(' ')' ':' TYPEID '{' expression '}'
-    { $$ = method($1, nil_Formals(), $5, $7); } 
-    | OBJECTID '(' formal_list ')' ':' TYPEID '{' expression '}'
-    { $$ = method($1, $3, $6, $8); } 
-    | formal
-    { $$ = attr($1.); }
-    | formal '<' '-' expression 
-    {}
+      OBJECTID '(' ')' ':' TYPEID '{' expr '}'
+      { $$ = method($1, nil_Formals(), $5, $7); } 
+    | OBJECTID '(' formal_list ')' ':' TYPEID '{' expr '}'
+      { $$ = method($1, $3, $6, $8); } 
+    | OBJECTID ':' TYPEID
+      { $$ = attr($1, $3, no_expr()); }
+    | OBJECTID ':' TYPEID '<' '-' expr 
+      { $$ = attr($1, $3, $6); }
     ;
 
     feature_list :
-    { $$ = nil_Features(); }
+      feature ';'
+      { $$ = single_Features($1); }
+    | feature_list ';' feature
+      { $$ = append_Features($1, single_Features($3)); }
     ;
 
     /* formals (in grammar) */
     formal :
-    OBJECTID ':' TYPEID
-    { $$ = formal($1, $3); }
+      OBJECTID ':' TYPEID
+      { $$ = formal($1, $3); }
     ;
 
-    formal_list 
-    : formal 
-    { $$ = single_Formals($1); }
+    formal_list : 
+      formal
+      { $$ = single_Formals($1); }
     | formal_list ',' formal 
-    { $$ = append_Formals($1, single_Formals($3)); }
+      { $$ = append_Formals($1, single_Formals($3)); }
     ;
-
-    /* features */
 
     /* expressions */
-    expression_list :
-    { $$ = nil_Expressions(); }
+    expr : 
+      OBJECTID '<' '-' expr
+      { $$ = assign($1, $4); }
+    | expr '@' TYPEID '.' OBJECTID '(' expr_list ')'
+      { $$ = static_dispatch($1, $3, $5, $7); }
+    | expr '.' OBJECTID '(' expr_list ')'
+      { $$ = dispatch($1, $3, $5); }
+    | '(' expr ')'
+      { $$ = $2; }
+    | OBJECTID
+      { $$ = object($1); }
+    | STR_CONST
+      { $$ = string_const($1); }
+    | INT_CONST
+      { $$ = int_const($1); }
+    | BOOL_CONST
+      { $$ = bool_const($1); } 
+      /* ... more exprs */
+
+    expr_list :
+      expr ';'
+      { $$ = single_Expressions($1); }
+    | expr_list ';' expr
+      { $$ = append_Expressions($1, single_Expressions($3)); }
     ;
     
     /* end of grammar */
