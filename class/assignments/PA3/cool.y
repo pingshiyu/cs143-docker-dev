@@ -158,9 +158,9 @@
     %precedence OBJECTID
     %precedence '('
     %precedence NOT
-    %precedence '=' '<' LE
-    %precedence '+' '-'
-    %precedence '*' '/'
+    %right '=' '<' LE
+    %right '+' '-'
+    %right '*' '/'
     %precedence ISVOID
     %precedence '~'
     %precedence '@'
