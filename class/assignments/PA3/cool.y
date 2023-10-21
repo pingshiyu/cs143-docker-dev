@@ -185,6 +185,9 @@
     | class_list class ';' 
       { $$ = append_Classes($1, single_Classes($2)); /* several classes */
         parse_results = $$; }
+    | class_list error ';'
+      { $$ = $1;
+        parse_results = $1; /* skip until next semicolon */ }
     ;
     
     /* If no parent is specified, the class inherits from the Object class. */
@@ -217,6 +220,8 @@
       { $$ = single_Features($1); }
     | feature_list feature ';'
       { $$ = append_Features($1, single_Features($2)); }
+    | feature_list error ';'
+      { $$ = $1; /* error: skip until the next semicolon, i.e. next function */ } 
     ;
 
     /* formals (in grammar) */
@@ -258,16 +263,16 @@
       { $$ = let($2, $4, no_expr(), $6); }
     | LET OBJECTID ':' TYPEID ASSIGN expr IN expr
       { $$ = let($2, $4, $6, $8); }
-    | LET OBJECTID ':' TYPEID expr              /* >= 2 bindings case */
-      { $$ = let($2, $4, no_expr(), $5); }
-    | LET OBJECTID ':' TYPEID ASSIGN expr expr /* value of binding, then remainder of let stmt */
-      { $$ = let($2, $4, $6, $7); }
-    | ',' OBJECTID ':' TYPEID expr              /* parse parts of a let stmt */
-      { $$ = let($2, $4, no_expr(), $5); }
-    | ',' OBJECTID ':' TYPEID ASSIGN expr expr
-      { $$ = let($2, $4, $6, $7); }
-    | ',' OBJECTID ':' TYPEID IN expr           /* end of bindings */
+    | LET OBJECTID ':' TYPEID ',' expr              /* >= 2 bindings case */
       { $$ = let($2, $4, no_expr(), $6); }
+    | LET OBJECTID ':' TYPEID ASSIGN expr ',' expr /* value of binding, then remainder of let stmt */
+      { $$ = let($2, $4, $6, $8); }
+    | OBJECTID ':' TYPEID ',' expr              /* parse parts of a let stmt */
+      { $$ = let($1, $3, no_expr(), $5); }
+    | OBJECTID ':' TYPEID ASSIGN expr ',' expr
+      { $$ = let($1, $3, $5, $7); }
+    | OBJECTID ':' TYPEID IN expr           /* end of bindings */
+      { $$ = let($1, $3, no_expr(), $5); }
     | ',' OBJECTID ':' TYPEID ASSIGN expr IN expr 
       { $$ = let($2, $4, $6, $8); }
     | CASE expr OF case_list ESAC
@@ -303,13 +308,18 @@
     | INT_CONST
       { $$ = int_const($1); }
     | BOOL_CONST
-      { $$ = bool_const($1); } 
+      { $$ = bool_const($1); }
+    | '(' error ')'
+      {} /* error recovery rule: skip to the closing parenthesis in expr */ 
+    ;
 
     expr_list :
       expr ';'
       { $$ = single_Expressions($1); }
     | expr_list expr ';'
       { $$ = append_Expressions($1, single_Expressions($2)); }
+    | expr_list error ';'
+      { $$ = $1; /* error: skip until the next semicolon */ } 
     ;
 
     expr_param_list :
