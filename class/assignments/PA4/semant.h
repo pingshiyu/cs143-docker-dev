@@ -3,6 +3,7 @@
 
 #include <assert.h>
 #include <iostream>  
+#include <list>
 #include "cool-tree.h"
 #include "stringtab.h"
 #include "symtab.h"
@@ -18,19 +19,34 @@ typedef ClassTable *ClassTableP;
 // information such as the inheritance graph.  You may use it or not as
 // you like: it is only here to provide a container for the supplied
 // methods.
-
 class ClassTable {
 private:
   int semant_errors;
-  void install_basic_classes();
+  Classes generate_basic_classes();
   ostream& error_stream;
 
+  Classes all_classes;
+  std::map<Symbol, Symbol> parent; // class' name -> parent class' name
+  std::map<Symbol, Class_> classes; // class' name -> class object
+  std::map<Symbol, Symbol*> canonical_class; // get class' canonical type instance
 public:
   ClassTable(Classes);
-  int errors() { return semant_errors; }
+
+  bool is_subclass(Symbol, Symbol);
+
+  void build_inheritance_graph();
+  void build_symbol_table();
+
+  Symbol getFileName(Symbol cls) { return classes.at(cls)->get_filename(); };
+
+  int errors() { return semant_errors; };
   ostream& semant_error();
   ostream& semant_error(Class_ c);
-  ostream& semant_error(Symbol filename, tree_node *t);
+  ostream& semant_error(Symbol class_name, tree_node *t);
+  ostream& semant_error_(Symbol filename, tree_node *t);
+  ostream& debug(Symbol filename, tree_node *t) { return semant_error(filename, t); };
+
+  static Symbol dynamic_type(Symbol curr_type, Symbol cls);
 };
 
 

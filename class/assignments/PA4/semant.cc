@@ -2,6 +2,10 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <map>
+#include <vector>
+#include <utility>
+#include <string>
 #include <stdarg.h>
 #include "semant.h"
 #include "utilities.h"
@@ -81,19 +85,31 @@ static void initialize_constants(void)
     val         = idtable.add_string("_val");
 }
 
+ClassTable::ClassTable(Classes classes)
+ : semant_errors(0)
+ , error_stream(cerr)
+ , all_classes( append_Classes(generate_basic_classes(), classes) )
+ {
+    // debug output
+    // std::cout << "----" << std::endl;
+    // inheritance.getValue()->dump(std::cout, 1);
+    // std::cout << "----" << std::endl;
+ };
 
+ Symbol ClassTable::dynamic_type(Symbol curr_type, Symbol cls) {
+    return (curr_type == SELF_TYPE) ? cls : curr_type;
+};
 
-ClassTable::ClassTable(Classes classes) : semant_errors(0) , error_stream(cerr) {
-
-    /* Fill this in */
-
-}
-
-void ClassTable::install_basic_classes() {
+Classes ClassTable::generate_basic_classes() {
+    /*
+    Returns the basic classes. With element 0 being "Object".
+    */
 
     // The tree package uses these globals to annotate the classes built below.
    // curr_lineno  = 0;
     Symbol filename = stringtable.add_string("<basic class>");
+
+    Classes all = nil_Classes();
     
     // The following demonstrates how to create dummy parse trees to
     // refer to basic Cool classes.  There's no need for method
@@ -122,6 +138,7 @@ void ClassTable::install_basic_classes() {
 					       single_Features(method(type_name, nil_Formals(), Str, no_expr()))),
 			       single_Features(method(copy, nil_Formals(), SELF_TYPE, no_expr()))),
 	       filename);
+    all = append_Classes(all, single_Classes(Object_class));
 
     // 
     // The IO class inherits from Object. Its methods are
@@ -142,7 +159,8 @@ void ClassTable::install_basic_classes() {
 										      SELF_TYPE, no_expr()))),
 					       single_Features(method(in_string, nil_Formals(), Str, no_expr()))),
 			       single_Features(method(in_int, nil_Formals(), Int, no_expr()))),
-	       filename);  
+	       filename);
+    all = append_Classes(all, single_Classes(IO_class));
 
     //
     // The Int class has no methods and only a single attribute, the
@@ -153,12 +171,14 @@ void ClassTable::install_basic_classes() {
 	       Object,
 	       single_Features(attr(val, prim_slot, no_expr())),
 	       filename);
+    all = append_Classes(all, single_Classes(Int_class));
 
     //
     // Bool also has only the "val" slot.
     //
     Class_ Bool_class =
 	class_(Bool, Object, single_Features(attr(val, prim_slot, no_expr())),filename);
+    all = append_Classes(all, single_Classes(Bool_class)); 
 
     //
     // The class Str has a number of slots and operations:
@@ -188,6 +208,9 @@ void ClassTable::install_basic_classes() {
 						      Str, 
 						      no_expr()))),
 	       filename);
+    all = append_Classes(all, single_Classes(Str_class));
+
+    return all;
 }
 
 ////////////////////////////////////////////////////////////////////
@@ -210,19 +233,273 @@ ostream& ClassTable::semant_error(Class_ c)
     return semant_error(c->get_filename(),c);
 }    
 
-ostream& ClassTable::semant_error(Symbol filename, tree_node *t)
+ostream& ClassTable::semant_error_(Symbol filename, tree_node *t)
 {
     error_stream << filename << ":" << t->get_line_number() << ": ";
     return semant_error();
 }
 
+ostream& ClassTable::semant_error(Symbol class_name, tree_node *t)
+{
+    error_stream << getFileName(class_name) << ":" << class_name << ":" << t->get_line_number() << ": ";
+    return semant_error();
+}
+
+
 ostream& ClassTable::semant_error()                  
 {                                                 
     semant_errors++;                            
     return error_stream;
-} 
+}
+
+void class__class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
+    // first add all of the class' attributes into the symbol table 
+    // these are local to the class, so new scope is created
+    ot.enterscope();
+
+    // self gets current class name
+    ot.addid(self, &cls);
+    
+    // select the attributes, compute these and add into the symbol table
+    for (int i = features->first(); features->more(i); i = features->next(i)) {
+        Feature feat = features->nth(i);
+        if (!feat->is_attr()) continue; 
+        feat->update_st(ot, ft, cls, ct); 
+    }
+
+    // call update_st on its features
+    for (int i = features->first(); features->more(i); i = features->next(i)) {
+        Feature feat = features->nth(i);
+        if (!feat->is_method()) continue; 
+        features->nth(i)->update_st(ot, ft, cls, ct);
+    }
+
+    ot.exitscope();
+}
+
+void attr_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
+    // attribute expressions can be recursive (so can refer to itself in the defining expr)
+    ot.addid(name, &type_decl);
+
+    // evaluate the defining expression
+    if (init->is_no_expr()) {
+        init->type = type_decl; // empty expr: vacuously the required type
+    } else {
+        init->update_st(ot, ft, cls, ct);
+    }
+
+    if (!ct.is_subclass(init->type, type_decl)) {
+        ct.semant_error_(cls, this) 
+            << "type of defining expr is incompatible with specific type" << std::endl;
+    }
+}
+
+void method_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
+    // evaluate the expression ensuring it returns the correct type
+    // adding the function args added into scope
+    ot.enterscope();
+    for (int i = formals->first(); formals->more(i); i = formals->next(i)) {
+        auto formal = formals->nth(i);
+        // ct.debug(ct.getFileName(cls), this) << cls << ": going through formal " << formal->get_name() << " of type: " << *formal->get_type() << std::endl;
+        ot.addid(formal->get_name(), formal->get_type());
+    }
+
+    // ct.debug(ct.getFileName(cls), this) << "all formals passed" << std::endl;
+
+    // evaluate expr with function args
+    Symbol body_type;
+    if (expr->is_no_expr()) {
+        body_type = return_type;
+    } else {
+        expr->update_st(ot, ft, cls, ct); 
+        body_type = expr->type;
+    }
+
+    auto dynamic_body_type = ct.dynamic_type(body_type, cls);
+    auto dynamic_return_type = ct.dynamic_type(return_type, cls);
+
+    // ct.debug(ct.getFileName(cls), this) << "expr typechecked" << std::endl;
+    // ct.debug(ct.getFileName(cls), this)
+    //     << "dynamic_ret_type = " << dynamic_body_type << ", class ret type = " << return_type << std::endl;
+    if (!ct.is_subclass(dynamic_body_type, dynamic_return_type)) {
+        ct.semant_error(cls, this) 
+            << "function " << name << ": "
+            << "return type of " << dynamic_body_type 
+            << " in function body is incompatible with defined function return type: " 
+            << dynamic_return_type << std::endl;
+    }
+
+    ot.exitscope();
+
+    // add method to function table for calls
+}
+
+void object_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
+    // must already be in the symbol table.
+    Symbol* defined_type = ot.lookup(name);
+    if (defined_type) set_type(*defined_type);
+    else {
+        ct.semant_error(cls, this) << "object " << name << 
+            " used before it has been defined." << std::endl;
+        set_type(Object);
+    }
+}
+
+void int_const_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
+    set_type(Int);
+}
+
+void string_const_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
+    set_type(Str);
+}
+
+void bool_const_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
+    set_type(Bool);
+}
+
+void block_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
+    Symbol final_type;
+    for (int i = body->first(); body->more(i); i = body->next(i)) {
+        Expression expr = body->nth(i);
+        expr->update_st(ot, ft, cls, ct);
+        final_type = expr->get_type();
+    }
+    set_type(final_type);
+}
+
+void assign_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
+    expr->update_st(ot, ft, cls, ct);
+    Symbol expr_type = expr->type;
+    Symbol* obj_type = ot.lookup(name);
+    if (!obj_type) {
+        ct.semant_error(cls, this) << "object " << name << " has not yet been defined.";
+        set_type(Object);
+    } else if (!ct.is_subclass(expr->type, *obj_type)) {
+        ct.semant_error(cls, this) << "object " << name << " of type " << obj_type << 
+            " is incompatible with assigned expression of type: " << expr_type << std::endl;
+        set_type(Object);
+    } else /* obj_type not null, and expr_type < obj_type */ {
+        // obj type remains unchanged
+        set_type(expr_type);
+    }
+}
+
+void new__class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
+    set_type(ct.dynamic_type(type_name, cls));
+}
+
+void dispatch_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
+
+}
+
+void static_dispatch_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
+
+void let_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
+
+void cond_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
+void loop_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
+void typcase_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
+void plus_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
+void sub_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
+void mul_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
+void divide_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
+void neg_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
+void lt_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
+void eq_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
+void leq_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
+void comp_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
+
+void isvoid_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
+    set_type(Bool);
+}
+
+void no_expr_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
+    set_type(No_type);
+}
 
 
+void ClassTable::build_inheritance_graph() {
+    // store a mapping from known objects, and their parent classes
+    // also from class name into their class objects.
+    for (int i = all_classes->next(all_classes->first()); all_classes->more(i); i = all_classes->next(i)) {
+        Class_ cc = all_classes->nth(i);
+
+        // add the child->parent relationship to the map
+        Symbol ccs = cc->get_name();
+        Symbol pcs = cc->get_parent();
+        if (parent.find(ccs) == parent.end()) {
+            parent[cc->get_name()] = cc->get_parent();
+            classes[cc->get_name()] = cc;
+            canonical_class[cc->get_name()] = cc->get_type();
+        } else {
+            // error: class has multiple parents
+            semant_error(cc) << "has multiple parents: " << pcs << " and " << parent.at(cc->get_name());
+        }
+    }
+
+    // cycle detection for each of the classes
+    for (auto it = parent.begin(); it != parent.end(); ++it) {
+        // for all classes, go up until you find its parent is "Object", or itself, or doesn't exist
+        Symbol iInit = it->first;
+
+        Symbol iCurr = it->first;
+        Symbol iParent = it->second;
+        bool parentDefined = parent.find(iParent) != parent.end();
+        while ((iParent != Object) && parentDefined && (iCurr != iInit)) {
+            iCurr = iParent;
+            iParent = parent.at(iParent);
+            parentDefined = parent.find(iParent) != parent.end();
+        }
+
+        if (iParent == Object) {
+            // parent is Object, chain is good.
+        } else if (!parentDefined) {
+            // error: parent class is undefined
+            semant_error(classes.at(iCurr)) << " parent class of " << iCurr << ": " << iParent << " doesn't exist." << std::endl;
+        } else if (iCurr == iInit) {
+            // error: cycle found
+            semant_error(classes.at(iInit)) << " has cyclic inheritance, involving " << iCurr << std::endl;
+        }  else {
+            semant_error(classes.at(iInit)) << " has undefined error when computing inheritance graph" << std::endl;
+        }
+    }
+
+    return;
+}
+
+bool ClassTable::is_subclass(Symbol t1, Symbol t2) {
+    // t1 < t2, t1 subclass of t2
+    // t2 is topmost class, t1 < t2 is always true
+    if (t2 == Object) return true;
+    
+    Symbol curr = t1;
+    do {
+        if (curr == t2) return true;
+        
+        if (parent.find(curr) != parent.end())
+            curr = parent.at(curr);
+        else {
+            std::ostringstream oss;
+            oss << "types " << t1 << " <= " << t2 << " is incomparable because " << curr << " has no parent."; 
+            throw std::out_of_range(oss.str()); 
+        }
+    } while (curr != Object);
+
+    // curr == Object :=> t1 belongs to a different chain than t2
+    return false;
+}
+
+void ClassTable::build_symbol_table() {
+    // iterate through the AST, updating the types in the AST as we go
+    // building the symbol table as we go
+    // making a new scope when appropriate.
+    ObjectTable ot;
+    FuncTable ft; // maybe need to populate this with 
+    for (int i = all_classes->next(all_classes->first()); all_classes->more(i); i = all_classes->next(i)) {
+        auto current_class = all_classes->nth(i);
+        current_class->update_st(ot, ft, current_class->get_name(), *this);
+    }
+}
 
 /*   This is the entry point to the semantic checker.
 
@@ -244,7 +521,8 @@ void program_class::semant()
     /* ClassTable constructor may do some semantic analysis */
     ClassTable *classtable = new ClassTable(classes);
 
-    /* some semantic analysis code may go here */
+    classtable->build_inheritance_graph();
+    classtable->build_symbol_table();
 
     if (classtable->errors()) {
 	cerr << "Compilation halted due to static semantic errors." << endl;

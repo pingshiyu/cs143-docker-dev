@@ -28,3 +28,10 @@ class/assignments/PA2/*
 class/assignments/PA3/*
 !class/assignments/PA3/*.y
 !class/assignments/PA3/*.aps
+
+# assignment 4
+!class/assignments/PA4
+class/assignments/PA4/*
+!class/assignments/PA4/*.h
+!class/assignments/PA4/*.cc
+!class/assignments/PA4/*.cl

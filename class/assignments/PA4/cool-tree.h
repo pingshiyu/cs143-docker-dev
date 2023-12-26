@@ -187,6 +187,7 @@ public:
    }
    Feature copy_Feature();
    void dump(ostream& stream, int n);
+   bool is_method() { return true; };
 
 #ifdef Feature_SHARED_EXTRAS
    Feature_SHARED_EXTRAS
@@ -211,6 +212,7 @@ public:
    }
    Feature copy_Feature();
    void dump(ostream& stream, int n);
+   bool is_attr() { return true; };
 
 #ifdef Feature_SHARED_EXTRAS
    Feature_SHARED_EXTRAS
@@ -755,6 +757,8 @@ public:
    }
    Expression copy_Expression();
    void dump(ostream& stream, int n);
+
+   bool is_no_expr() { return true; };
 
 #ifdef Expression_SHARED_EXTRAS
    Expression_SHARED_EXTRAS

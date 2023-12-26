@@ -1,4 +1,4 @@
-class C {
+class C inherits Random {
 	a : Int;
 	b : Bool;
 	init(x : Int, y : Bool) : C {
