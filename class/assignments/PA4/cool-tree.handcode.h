@@ -49,7 +49,7 @@ typedef Cases_class *Cases;
 
 class ClassTable;
 typedef SymbolTable<Symbol /*ObjectId*/, Symbol /*Type*/> ObjectTable;
-typedef SymbolTable<std::pair<Symbol, Symbol>, std::vector<Symbol>> FuncTable;
+typedef SymbolTable<std::pair<Symbol, Symbol> /*(Class,FuncName)*/, std::vector<Symbol>/*FuncSignature*/> FuncTable;
 
 #define Program_EXTRAS                          \
 virtual void semant() = 0;			\
@@ -67,6 +67,7 @@ virtual Symbol get_name() = 0; \
 virtual Symbol* get_type() = 0; \
 virtual Symbol get_parent() = 0; \
 virtual Features get_features() = 0; \
+virtual void populate_ft(FuncTable& ft) = 0; \
 virtual void update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) = 0;
 
 
@@ -77,6 +78,7 @@ Symbol get_name() { return name; }; \
 Symbol* get_type() { return &name; }; \
 Symbol get_parent() { return parent; }; \
 Features get_features() { return features; }; \
+void populate_ft(FuncTable& ft); \
 void update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct);
 
 
@@ -84,12 +86,14 @@ void update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct);
 virtual void dump_with_types(ostream&,int) = 0; \
 virtual bool is_attr() { return false; }; \
 virtual bool is_method() { return false; }; \
+virtual void populate_ft(FuncTable& ft, Symbol cls) = 0; \
 virtual void update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) = 0;
 
 
 #define Feature_SHARED_EXTRAS                                       \
 void dump_with_types(ostream&,int);    \
-void update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct); 
+void populate_ft(FuncTable& ft, Symbol cls); \
+void update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct);
 
 
 

@@ -34,6 +34,11 @@ public:
 
   bool is_subclass(Symbol, Symbol);
 
+  void dispatch_on(
+    Symbol on_class, Symbol function_name, Expressions actual, 
+    Expression node,
+    ObjectTable& ot, FuncTable& ft, Symbol cls);
+
   void build_inheritance_graph();
   void build_symbol_table();
 

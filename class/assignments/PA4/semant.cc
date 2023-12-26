@@ -283,12 +283,12 @@ void attr_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTabl
 
     // evaluate the defining expression
     if (init->is_no_expr()) {
-        init->type = type_decl; // empty expr: vacuously the required type
+        init->set_type(type_decl); // empty expr: vacuously the required type
     } else {
         init->update_st(ot, ft, cls, ct);
     }
 
-    if (!ct.is_subclass(init->type, type_decl)) {
+    if (!ct.is_subclass(init->get_type(), type_decl)) {
         ct.semant_error_(cls, this) 
             << "type of defining expr is incompatible with specific type" << std::endl;
     }
@@ -298,13 +298,11 @@ void method_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTa
     // evaluate the expression ensuring it returns the correct type
     // adding the function args added into scope
     ot.enterscope();
+
     for (int i = formals->first(); formals->more(i); i = formals->next(i)) {
         auto formal = formals->nth(i);
-        // ct.debug(ct.getFileName(cls), this) << cls << ": going through formal " << formal->get_name() << " of type: " << *formal->get_type() << std::endl;
         ot.addid(formal->get_name(), formal->get_type());
     }
-
-    // ct.debug(ct.getFileName(cls), this) << "all formals passed" << std::endl;
 
     // evaluate expr with function args
     Symbol body_type;
@@ -312,26 +310,21 @@ void method_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTa
         body_type = return_type;
     } else {
         expr->update_st(ot, ft, cls, ct); 
-        body_type = expr->type;
+        body_type = expr->get_type();
     }
 
     auto dynamic_body_type = ct.dynamic_type(body_type, cls);
     auto dynamic_return_type = ct.dynamic_type(return_type, cls);
 
-    // ct.debug(ct.getFileName(cls), this) << "expr typechecked" << std::endl;
-    // ct.debug(ct.getFileName(cls), this)
-    //     << "dynamic_ret_type = " << dynamic_body_type << ", class ret type = " << return_type << std::endl;
     if (!ct.is_subclass(dynamic_body_type, dynamic_return_type)) {
         ct.semant_error(cls, this) 
-            << "function " << name << ": "
+            << "function " << cls << "." << name << ": "
             << "return type of " << dynamic_body_type 
             << " in function body is incompatible with defined function return type: " 
             << dynamic_return_type << std::endl;
     }
 
     ot.exitscope();
-
-    // add method to function table for calls
 }
 
 void object_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
@@ -369,12 +362,12 @@ void block_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTab
 
 void assign_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
     expr->update_st(ot, ft, cls, ct);
-    Symbol expr_type = expr->type;
+    Symbol expr_type = expr->get_type();
     Symbol* obj_type = ot.lookup(name);
     if (!obj_type) {
         ct.semant_error(cls, this) << "object " << name << " has not yet been defined.";
         set_type(Object);
-    } else if (!ct.is_subclass(expr->type, *obj_type)) {
+    } else if (!ct.is_subclass(expr->get_type(), *obj_type)) {
         ct.semant_error(cls, this) << "object " << name << " of type " << obj_type << 
             " is incompatible with assigned expression of type: " << expr_type << std::endl;
         set_type(Object);
@@ -388,11 +381,57 @@ void new__class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTabl
     set_type(ct.dynamic_type(type_name, cls));
 }
 
-void dispatch_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
+void ClassTable::dispatch_on(
+    Symbol on_class, Symbol function_name, Expressions actual, 
+    Expression node,
+    ObjectTable& ot, FuncTable& ft, Symbol cls) {
+    std::vector<Symbol>* function_sig = ft.lookup({on_class, function_name});
 
+    // verify the number of arguments match
+    if (function_sig->size() != (actual->len() + 1)) {
+        semant_error(cls, node) << "Number of arguments provided (" << actual->len() 
+            << ") does not match required arguments of " << on_class << "." << function_name 
+            << " (need " << (function_sig->size() - 1) << ")" << std::endl; 
+        return; // no need to type check the rest of the subtree
+    }
+
+    // check each argument type T1, ..., Tn is a subclass of the function input
+    for (int i = actual->first(); actual->more(i); i = actual->next(i)) {
+        auto expr_i = actual->nth(i);
+        expr_i->update_st(ot, ft, cls, *this);
+        auto sig_i = function_sig->at(i);
+
+        if (!is_subclass(expr_i->get_type(), sig_i)) {
+            semant_error(cls, node) << "Argument " << i << " of " 
+                << on_class << "." << function_name 
+                << " has type " << expr_i->get_type() << ", incompatible with " 
+                << "expected type of " << sig_i << std::endl;
+        }
+    }
+
+    // output type is T0 if it is SELF_TYPE, otherwise is the function's output type
+    auto fn_out_type = function_sig->at(actual->len());
+    auto dynamic_out_type = (fn_out_type == SELF_TYPE) ? actual->nth(actual->first())->get_type() : fn_out_type;
+    node->set_type(dynamic_out_type);
 }
 
-void static_dispatch_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
+void dispatch_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
+    // check argument type T0 is the function class type (with dynamic type)
+    expr->update_st(ot, ft, cls, ct);
+    auto function_class_type = ct.dynamic_type(expr->get_type(), cls);
+    ct.dispatch_on(function_class_type, name, actual, this, ot, ft, cls);
+}
+
+void static_dispatch_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
+    // check argument type T0 is the function class type (with dynamic type)
+    expr->update_st(ot, ft, cls, ct);
+    if (!ct.is_subclass(expr->get_type(), type_name)) {
+        ct.semant_error(cls, this) << "type of expression must be a subclass of " 
+            << type_name << ", but is actually a " << expr->get_type() << std::endl;
+        return;
+    }
+    ct.dispatch_on(type_name, name, actual, this, ot, ft, cls);
+}
 
 void let_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
 
@@ -417,6 +456,25 @@ void no_expr_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassT
     set_type(No_type);
 }
 
+void class__class::populate_ft(FuncTable& ft) {
+    for (int i = features->first(); features->more(i); i = features->next(i))
+        features->nth(i)->populate_ft(ft, name);
+}
+
+void method_class::populate_ft(FuncTable& ft, Symbol cls) {
+    std::vector<Symbol>* sig = new std::vector<Symbol>();
+    for (int i = formals->first(); formals->more(i); i = formals->next(i)) {
+        Formal formal = formals->nth(i);
+        sig->push_back(*formal->get_type());
+    }
+    sig->push_back(return_type);
+
+    ft.addid({cls, name}, sig);
+}
+
+void attr_class::populate_ft(FuncTable& ft, Symbol cls) {
+    // noop
+}
 
 void ClassTable::build_inheritance_graph() {
     // store a mapping from known objects, and their parent classes
@@ -493,8 +551,13 @@ void ClassTable::build_symbol_table() {
     // iterate through the AST, updating the types in the AST as we go
     // building the symbol table as we go
     // making a new scope when appropriate.
+    FuncTable ft; 
+    ft.enterscope();
+    for (int i = all_classes->next(all_classes->first()); all_classes->more(i); i = all_classes->next(i)) {
+        all_classes->nth(i)->populate_ft(ft);
+    }
+
     ObjectTable ot;
-    FuncTable ft; // maybe need to populate this with 
     for (int i = all_classes->next(all_classes->first()); all_classes->more(i); i = all_classes->next(i)) {
         auto current_class = all_classes->nth(i);
         current_class->update_st(ot, ft, current_class->get_name(), *this);
