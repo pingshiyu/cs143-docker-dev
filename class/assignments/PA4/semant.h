@@ -38,6 +38,10 @@ public:
     Symbol on_class, Symbol function_name, Expressions actual, 
     Expression node,
     ObjectTable& ot, FuncTable& ft, Symbol cls);
+  bool check_int_binary_expr(
+    Expression e1, Expression e2, Expression t,
+    ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct
+  );
 
   Symbol join(const std::vector<Symbol>& types) const;
 
@@ -56,10 +60,6 @@ public:
     std::string expr_str_desc, Symbol expected, Symbol actual);  
   ostream& semant_error_(Symbol filename, tree_node *t);
   ostream& debug(Symbol filename, tree_node *t) { return semant_error(filename, t); };
-
-  bool check_istype(
-    Symbol class_name, Expression t,
-    std::string expr_str_desc, Symbol expected, Symbol actual);
 
   static Symbol dynamic_type(Symbol curr_type, Symbol cls);
 };

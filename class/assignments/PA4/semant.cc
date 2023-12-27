@@ -258,19 +258,6 @@ ostream& ClassTable::semant_error_expected(
             << "Got actual type " << actual << std::endl;
 }
 
-bool ClassTable::check_istype(
-    Symbol class_name, Expression t,
-    std::string expr_str_desc, Symbol expected, Symbol actual) {
-    if (actual != expected) {
-        semant_error_expected(class_name, t, expr_str_desc, expected, actual);
-        t->set_type(Object);
-        return false;
-    }
-
-    return true;
-}
-
-
 ostream& ClassTable::semant_error()                  
 {                                                 
     semant_errors++;                            
@@ -544,26 +531,67 @@ void eq_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable&
     set_type(Bool);
 }
 
-void plus_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
+bool ClassTable::check_int_binary_expr(
+    Expression e1, Expression e2, Expression t,
+    ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
     e1->update_st(ot, ft, cls, ct);
     e2->update_st(ot, ft, cls, ct);
     Symbol e1t = e1->get_type();
     Symbol e2t = e2->get_type();
     if ((e1t != Int) || (e2t != Int)) {
-        ct.semant_error_e(cls, this) << "Both sides of the arithmetic operation must be type. " 
+        ct.semant_error_e(cls, t) << "Both sides of the arithmetic operation must be type. " 
             << "Int. But got LHS :: " << e1t 
             << ", RHS :: " << e2t << std::endl;
+        return false;
+    }
+
+    return true;
+}
+
+void plus_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
+    if (ct.check_int_binary_expr(e1, e2, this, ot, ft, cls, ct)) {
+        set_type(Int);
+    }
+}
+
+void sub_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
+    if (ct.check_int_binary_expr(e1, e2, this, ot, ft, cls, ct)) {
+        set_type(Int);
+    }
+}
+
+void mul_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
+    if (ct.check_int_binary_expr(e1, e2, this, ot, ft, cls, ct)) {
+        set_type(Int);
+    }
+}
+
+void divide_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
+    if (ct.check_int_binary_expr(e1, e2, this, ot, ft, cls, ct)) {
+        set_type(Int);
+    }
+}
+
+void lt_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
+    if (ct.check_int_binary_expr(e1, e2, this, ot, ft, cls, ct)) {
+        set_type(Int);
+    }
+}
+
+void leq_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
+    if (ct.check_int_binary_expr(e1, e2, this, ot, ft, cls, ct)) {
+        set_type(Int);
+    }
+}
+
+void neg_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
+    e1->update_st(ot, ft, cls, ct);
+    if (e1->get_type() != Int) {
+        ct.semant_error_expected(cls, this, "Negative of expression", Int, e1->get_type());
         return;
     }
     set_type(Int);
 }
-
-void sub_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
-void mul_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
-void divide_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
-void neg_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
-void lt_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
-void leq_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
 
 /* TODO: CHECK MAIN FUNCTION EXISTS */
 /* TODO: FIX ERROR IN TYPECHECKING BAD.CL */
