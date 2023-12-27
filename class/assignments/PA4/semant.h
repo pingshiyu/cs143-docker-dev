@@ -32,12 +32,14 @@ private:
 public:
   ClassTable(Classes);
 
-  bool is_subclass(Symbol, Symbol);
+  bool is_subclass(Symbol, Symbol) const;
 
   void dispatch_on(
     Symbol on_class, Symbol function_name, Expressions actual, 
     Expression node,
     ObjectTable& ot, FuncTable& ft, Symbol cls);
+
+  Symbol join(const std::vector<Symbol>& types) const;
 
   void build_inheritance_graph();
   void build_symbol_table();
@@ -48,8 +50,16 @@ public:
   ostream& semant_error();
   ostream& semant_error(Class_ c);
   ostream& semant_error(Symbol class_name, tree_node *t);
+  ostream& semant_error_e(Symbol class_name, Expression);
+  ostream& semant_error_expected(
+    Symbol class_name, Expression t, 
+    std::string expr_str_desc, Symbol expected, Symbol actual);  
   ostream& semant_error_(Symbol filename, tree_node *t);
   ostream& debug(Symbol filename, tree_node *t) { return semant_error(filename, t); };
+
+  bool check_istype(
+    Symbol class_name, Expression t,
+    std::string expr_str_desc, Symbol expected, Symbol actual);
 
   static Symbol dynamic_type(Symbol curr_type, Symbol cls);
 };

@@ -27,3 +27,12 @@ class Mut2 {
         }
     };
 };
+
+class Let1 {
+    let1(a : String, b : Int) : SELF_TYPE {
+        {
+            let x : Int <- x in a;
+            self;
+        }
+    };
+};

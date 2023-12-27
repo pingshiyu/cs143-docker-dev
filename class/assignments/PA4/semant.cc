@@ -245,6 +245,31 @@ ostream& ClassTable::semant_error(Symbol class_name, tree_node *t)
     return semant_error();
 }
 
+ostream& ClassTable::semant_error_e(Symbol class_name, Expression t)
+{   
+    t->set_type(Object);
+    return semant_error(class_name, t);
+}
+
+ostream& ClassTable::semant_error_expected(
+    Symbol class_name, Expression t, 
+    std::string expr_str_desc, Symbol expected, Symbol actual) {
+    semant_error_e(class_name, t) << expr_str_desc << " must be type " << expected << ". " 
+            << "Got actual type " << actual << std::endl;
+}
+
+bool ClassTable::check_istype(
+    Symbol class_name, Expression t,
+    std::string expr_str_desc, Symbol expected, Symbol actual) {
+    if (actual != expected) {
+        semant_error_expected(class_name, t, expr_str_desc, expected, actual);
+        t->set_type(Object);
+        return false;
+    }
+
+    return true;
+}
+
 
 ostream& ClassTable::semant_error()                  
 {                                                 
@@ -332,9 +357,8 @@ void object_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTa
     Symbol* defined_type = ot.lookup(name);
     if (defined_type) set_type(*defined_type);
     else {
-        ct.semant_error(cls, this) << "object " << name << 
+        ct.semant_error_e(cls, this) << "object " << name << 
             " used before it has been defined." << std::endl;
-        set_type(Object);
     }
 }
 
@@ -365,12 +389,10 @@ void assign_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTa
     Symbol expr_type = expr->get_type();
     Symbol* obj_type = ot.lookup(name);
     if (!obj_type) {
-        ct.semant_error(cls, this) << "object " << name << " has not yet been defined.";
-        set_type(Object);
+        ct.semant_error_e(cls, this) << "object " << name << " has not yet been defined.";
     } else if (!ct.is_subclass(expr->get_type(), *obj_type)) {
-        ct.semant_error(cls, this) << "object " << name << " of type " << obj_type << 
+        ct.semant_error_e(cls, this) << "object " << name << " of type " << obj_type << 
             " is incompatible with assigned expression of type: " << expr_type << std::endl;
-        set_type(Object);
     } else /* obj_type not null, and expr_type < obj_type */ {
         // obj type remains unchanged
         set_type(expr_type);
@@ -426,27 +448,125 @@ void static_dispatch_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls
     // check argument type T0 is the function class type (with dynamic type)
     expr->update_st(ot, ft, cls, ct);
     if (!ct.is_subclass(expr->get_type(), type_name)) {
-        ct.semant_error(cls, this) << "type of expression must be a subclass of " 
+        ct.semant_error_e(cls, this) << "type of expression must be a subclass of " 
             << type_name << ", but is actually a " << expr->get_type() << std::endl;
         return;
     }
     ct.dispatch_on(type_name, name, actual, this, ot, ft, cls);
 }
 
-void let_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
+void let_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
+    Symbol identifier_type;
 
-void cond_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
-void loop_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
-void typcase_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
-void plus_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
+    if (init->is_no_expr()) {
+        // no declaration
+        identifier_type = type_decl;
+    } else {
+        init->update_st(ot, ft, cls, ct);
+        auto init_type = init->get_type();
+        identifier_type = ct.dynamic_type(type_decl, cls);
+        if (!ct.is_subclass(init_type, identifier_type)) {
+            ct.semant_error_e(cls, this) << "variable " << identifier << " of declared type " 
+                << identifier_type << " is incompatible with defining expression of type "
+                << init_type << std::endl;
+            return;
+        }
+    }
+
+    ot.enterscope(); // new scope for the new variable
+    ot.addid(identifier, &identifier_type);
+    body->update_st(ot, ft, cls, ct);
+    set_type(body->type); // let-expression gets the type of the body
+    ot.exitscope(); 
+}
+
+void typcase_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
+    std::vector<Symbol> types;
+    for (int i = cases->first(); cases->more(i); i = cases->next(i)) {
+        ot.enterscope(); // scope to accomodate the current branch only
+        Case c = cases->nth(i);
+        c->update_st(ot, ft, cls, ct);
+        types.push_back(c->get_expr_type());
+        ot.exitscope();
+    }
+    set_type(ct.join(types));
+}
+
+void branch_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
+    ot.addid(name, &type_decl);
+    expr->update_st(ot, ft, cls, ct);
+}
+
+void loop_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
+    pred->update_st(ot, ft, cls, ct);
+    if (pred->get_type() != Bool) {
+        ct.semant_error_expected(cls, this, "predicate in the loop", Bool, pred->get_type());
+        return;
+    }
+    body->update_st(ot, ft, cls, ct); // trigger type checking for loop body.
+    set_type(Object); // loop always gets object 
+}
+
+void cond_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
+    pred->update_st(ot, ft, cls, ct);
+    if (pred->get_type() != Bool) {
+        ct.semant_error_expected(cls, this, "predicate in the if expression", Bool, pred->get_type());
+        return;
+    }
+
+    then_exp->update_st(ot, ft, cls, ct);
+    else_exp->update_st(ot, ft, cls, ct);
+    set_type(ct.join(
+        {then_exp->get_type(), else_exp->get_type()}
+    ));
+}
+
+void comp_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
+    e1->update_st(ot, ft, cls, ct);
+    if (e1->get_type() != Bool) {
+        ct.semant_error_expected(cls, this, "complement of expression", Bool, e1->get_type());
+        return;
+    }
+    set_type(Bool);
+}
+
+void eq_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
+    e1->update_st(ot, ft, cls, ct);
+    e2->update_st(ot, ft, cls, ct);
+    Symbol e1t = e1->get_type();
+    Symbol e2t = e2->get_type();
+    if ((e1t == Bool || e1t == Int | e1t == Str) && (e1t != e2t)) {
+        ct.semant_error_e(cls, this) << "Expressions on both sides must have the same type. " 
+            << "LHS expression has type " << e1t 
+            << ". But RHS has type " << e2t << std::endl;
+        return;
+    }
+    set_type(Bool);
+}
+
+void plus_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
+    e1->update_st(ot, ft, cls, ct);
+    e2->update_st(ot, ft, cls, ct);
+    Symbol e1t = e1->get_type();
+    Symbol e2t = e2->get_type();
+    if ((e1t != Int) || (e2t != Int)) {
+        ct.semant_error_e(cls, this) << "Both sides of the arithmetic operation must be type. " 
+            << "Int. But got LHS :: " << e1t 
+            << ", RHS :: " << e2t << std::endl;
+        return;
+    }
+    set_type(Int);
+}
+
 void sub_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
 void mul_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
 void divide_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
 void neg_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
 void lt_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
-void eq_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
 void leq_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
-void comp_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {}
+
+/* TODO: CHECK MAIN FUNCTION EXISTS */
+/* TODO: FIX ERROR IN TYPECHECKING BAD.CL */
 
 void isvoid_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
     set_type(Bool);
@@ -474,6 +594,46 @@ void method_class::populate_ft(FuncTable& ft, Symbol cls) {
 
 void attr_class::populate_ft(FuncTable& ft, Symbol cls) {
     // noop
+}
+
+bool ClassTable::is_subclass(Symbol t1, Symbol t2) const {
+    // t1 < t2, t1 subclass of t2
+    // t2 is topmost class, t1 < t2 is always true
+    // assume No_type to be min, Object to be max type.
+    if (t2 == Object) return true;
+    if (t1 == Object) return (t2 == Object);
+    if (t1 == No_type) return true;
+    if (t2 == No_type) return (t1 == No_type);
+    
+    Symbol curr = t1;
+    do {
+        if (curr == t2) return true;
+        
+        if (parent.find(curr) != parent.end())
+            curr = parent.at(curr);
+        else {
+            std::ostringstream oss;
+            oss << "types " << t1 << " <= " << t2 << " is incomparable because " << curr << " has no parent."; 
+            throw std::out_of_range(oss.str()); 
+        }
+    } while (curr != Object);
+
+    // curr == Object :=> t1 belongs to a different chain than t2
+    return false;
+}
+
+Symbol ClassTable::join(const std::vector<Symbol>& types) const {
+    if (types.empty()) return No_type;
+    
+    Symbol res = types.front();
+    for (const auto& t : types) {
+        while (!is_subclass(t, res) && (res != Object)) {
+            res = parent.at(res);
+        }
+        
+        if (res == Object) return res;
+    }
+    return res;
 }
 
 void ClassTable::build_inheritance_graph() {
@@ -523,28 +683,6 @@ void ClassTable::build_inheritance_graph() {
     }
 
     return;
-}
-
-bool ClassTable::is_subclass(Symbol t1, Symbol t2) {
-    // t1 < t2, t1 subclass of t2
-    // t2 is topmost class, t1 < t2 is always true
-    if (t2 == Object) return true;
-    
-    Symbol curr = t1;
-    do {
-        if (curr == t2) return true;
-        
-        if (parent.find(curr) != parent.end())
-            curr = parent.at(curr);
-        else {
-            std::ostringstream oss;
-            oss << "types " << t1 << " <= " << t2 << " is incomparable because " << curr << " has no parent."; 
-            throw std::out_of_range(oss.str()); 
-        }
-    } while (curr != Object);
-
-    // curr == Object :=> t1 belongs to a different chain than t2
-    return false;
 }
 
 void ClassTable::build_symbol_table() {

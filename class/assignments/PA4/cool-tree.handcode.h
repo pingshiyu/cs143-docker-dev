@@ -112,11 +112,13 @@ Symbol get_name() { return name; }
 
 #define Case_EXTRAS                             \
 virtual void dump_with_types(ostream& ,int) = 0; \
-void update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct);
+virtual Symbol get_expr_type() = 0; \
+virtual void update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) = 0;
 
 
 #define branch_EXTRAS                                   \
 void dump_with_types(ostream& ,int); \
+Symbol get_expr_type() { return expr->get_type(); }; \
 void update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct);
 
 
