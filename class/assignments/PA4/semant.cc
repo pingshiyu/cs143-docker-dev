@@ -230,7 +230,7 @@ Classes ClassTable::generate_basic_classes() {
 
 ostream& ClassTable::semant_error(Class_ c)
 {                                                             
-    return semant_error(c->get_filename(),c);
+    return semant_error_(c->get_filename(),c);
 }    
 
 ostream& ClassTable::semant_error_(Symbol filename, tree_node *t)
@@ -634,9 +634,9 @@ bool ClassTable::is_subclass(Symbol t1, Symbol t2) const {
     do {
         if (curr == t2) return true;
         
-        if (parent.find(curr) != parent.end())
+        if (parent.find(curr) != parent.end()) {
             curr = parent.at(curr);
-        else {
+        } else {
             std::ostringstream oss;
             oss << "types " << t1 << " <= " << t2 << " is incomparable because " << curr << " has no parent."; 
             throw std::out_of_range(oss.str()); 
@@ -666,14 +666,14 @@ void ClassTable::build_inheritance_graph() {
     // also from class name into their class objects.
     for (int i = all_classes->next(all_classes->first()); all_classes->more(i); i = all_classes->next(i)) {
         Class_ cc = all_classes->nth(i);
+        Symbol ccs = cc->get_name();
+        classes[ccs] = cc;
+        canonical_class[ccs] = cc->get_type();
 
         // add the child->parent relationship to the map
-        Symbol ccs = cc->get_name();
         Symbol pcs = cc->get_parent();
         if (parent.find(ccs) == parent.end()) {
-            parent[cc->get_name()] = cc->get_parent();
-            classes[cc->get_name()] = cc;
-            canonical_class[cc->get_name()] = cc->get_type();
+            parent[ccs] = pcs;
         } else {
             // error: class has multiple parents
             semant_error(cc) << "has multiple parents: " << pcs << " and " << parent.at(cc->get_name());
@@ -693,6 +693,7 @@ void ClassTable::build_inheritance_graph() {
             iParent = parent.at(iParent);
             parentDefined = parent.find(iParent) != parent.end();
         }
+
 
         if (iParent == Object) {
             // parent is Object, chain is good.
@@ -760,8 +761,8 @@ void program_class::semant()
     classtable->build_symbol_table();
 
     if (classtable->errors()) {
-	cerr << "Compilation halted due to static semantic errors." << endl;
-	exit(1);
+	    cerr << "Compilation halted due to static semantic errors." << endl;
+	    exit(1);
     }
 }
 

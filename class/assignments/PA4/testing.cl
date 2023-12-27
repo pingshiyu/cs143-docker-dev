@@ -37,7 +37,11 @@ class Let1 {
     };
 };
 
-class Maina {
+class Kek : Let1 {
+    kek1() : Int { 5 };
+};
+
+class Main {
     main() : Int {
         {
             1;
