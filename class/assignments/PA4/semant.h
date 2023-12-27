@@ -47,6 +47,9 @@ public:
 
   void build_inheritance_graph();
   void build_symbol_table();
+  void check_main_fn_exist(FuncTable& ft);
+
+  /* TODO: FIX ERROR IN TYPECHECKING BAD.CL */
 
   Symbol getFileName(Symbol cls) { return classes.at(cls)->get_filename(); };
 

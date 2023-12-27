@@ -254,7 +254,7 @@ ostream& ClassTable::semant_error_e(Symbol class_name, Expression t)
 ostream& ClassTable::semant_error_expected(
     Symbol class_name, Expression t, 
     std::string expr_str_desc, Symbol expected, Symbol actual) {
-    semant_error_e(class_name, t) << expr_str_desc << " must be type " << expected << ". " 
+    return semant_error_e(class_name, t) << expr_str_desc << " must be type " << expected << ". " 
             << "Got actual type " << actual << std::endl;
 }
 
@@ -397,7 +397,7 @@ void ClassTable::dispatch_on(
     std::vector<Symbol>* function_sig = ft.lookup({on_class, function_name});
 
     // verify the number of arguments match
-    if (function_sig->size() != (actual->len() + 1)) {
+    if (((int) function_sig->size()) != (actual->len() + 1)) {
         semant_error(cls, node) << "Number of arguments provided (" << actual->len() 
             << ") does not match required arguments of " << on_class << "." << function_name 
             << " (need " << (function_sig->size() - 1) << ")" << std::endl; 
@@ -522,7 +522,7 @@ void eq_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable&
     e2->update_st(ot, ft, cls, ct);
     Symbol e1t = e1->get_type();
     Symbol e2t = e2->get_type();
-    if ((e1t == Bool || e1t == Int | e1t == Str) && (e1t != e2t)) {
+    if (((e1t == Bool) || (e1t == Int) | (e1t == Str)) && (e1t != e2t)) {
         ct.semant_error_e(cls, this) << "Expressions on both sides must have the same type. " 
             << "LHS expression has type " << e1t 
             << ". But RHS has type " << e2t << std::endl;
@@ -592,9 +592,6 @@ void neg_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable
     }
     set_type(Int);
 }
-
-/* TODO: CHECK MAIN FUNCTION EXISTS */
-/* TODO: FIX ERROR IN TYPECHECKING BAD.CL */
 
 void isvoid_class::update_st(ObjectTable& ot, FuncTable& ft, Symbol cls, ClassTable& ct) {
     set_type(Bool);
@@ -723,10 +720,19 @@ void ClassTable::build_symbol_table() {
         all_classes->nth(i)->populate_ft(ft);
     }
 
+    check_main_fn_exist(ft);
+
     ObjectTable ot;
     for (int i = all_classes->next(all_classes->first()); all_classes->more(i); i = all_classes->next(i)) {
         auto current_class = all_classes->nth(i);
         current_class->update_st(ot, ft, current_class->get_name(), *this);
+    }
+}
+
+void ClassTable::check_main_fn_exist(FuncTable& ft) {
+    if (ft.lookup({Main, main_meth}) == NULL) {
+        semant_error() << "Expected program to contain a Main class, with a Main.main function." 
+            << std::endl;
     }
 }
 

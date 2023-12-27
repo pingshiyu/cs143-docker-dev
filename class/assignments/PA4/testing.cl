@@ -36,3 +36,11 @@ class Let1 {
         }
     };
 };
+
+class Maina {
+    main() : Int {
+        {
+            1;
+        }
+    };
+};
